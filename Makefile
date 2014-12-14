@@ -1,0 +1,90 @@
+################################################################################
+# These are variables for the GBA toolchain build
+# You can add others if you wish to
+# Nick Graves
+################################################################################
+
+# The name of your desired GBA game
+# This should be a just a name i.e MyFirstGBAGame
+# No SPACES AFTER THE NAME.
+PROGNAME = duck_hunt
+
+# The object files you want to compile into your program
+# This should be a space (SPACE!) separated list of .o files
+OFILES = ./main/mylib.o ./main/main.o ./main/gamelib.o ./text/textlib.o ./text/font.o ./images/duck_hunt_right_32x23.o ./images/duck_hunt_left_32x23.o ./images/boom_32x23.o ./images/bullet_9x21.o ./images/start_screen.o ./images/end_screen.o
+
+# The header files you have created.
+# This is necessary to determine when to recompile for files.
+# This should be a space (SPACE!) separated list of .h files
+HFILES = ./main/mylib.h ./main/gamelib.h ./text/textlib.h ./images/duck_hunt_right_32x23.h ./images/duck_hunt_left_32x23.h ./images/boom_32x23.h ./images/bullet_9x21.h ./images/start_screen.h ./images/end_screen.h
+
+################################################################################
+# These are various settings used to make the GBA toolchain work
+# DO NOT EDIT BELOW.
+################################################################################
+
+TOOLDIR  = /usr/local/cs2110-tools
+ARMLIB   = $(TOOLDIR)/arm-thumb-eabi/lib
+CFLAGS   = -Wall -Werror -std=c99 -pedantic
+CFLAGS   += -mthumb-interwork -mlong-calls -nostartfiles -MMD -MP -I $(TOOLDIR)/include
+LDFLAGS = -L $(TOOLDIR)/lib \
+		  -L $(TOOLDIR)/lib/gcc/arm-thumb-eabi/4.4.1/thumb \
+		  -L $(ARMLIB) \
+		  --script $(ARMLIB)/arm-gba.ld
+CDEBUG   = -g -DDEBUG
+CRELEASE = -O2
+CC       = $(TOOLDIR)/bin/arm-thumb-eabi-gcc
+AS       = $(TOOLDIR)/bin/arm-thumb-eabi-as
+LD       = $(TOOLDIR)/bin/arm-thumb-eabi-ld
+OBJCOPY  = $(TOOLDIR)/bin/arm-thumb-eabi-objcopy
+GDB      = $(TOOLDIR)/bin/arm-thumb-eabi-gdb
+CFILES   = $(OFILES:.o=.c)
+
+################################################################################
+# These are the targets for the GBA build system
+################################################################################
+
+all : CFLAGS += $(CRELEASE)
+all : $(PROGNAME).gba
+	@echo "[FINISH] Created $(PROGNAME).gba"
+
+.PHONY : all clean
+
+$(PROGNAME).gba : $(PROGNAME).elf
+	@echo "[LINK] Linking objects together to create $(PROGNAME).gba"
+	@$(OBJCOPY) -O binary $(PROGNAME).elf $(PROGNAME).gba
+
+$(PROGNAME).elf : crt0.o $(OFILES)
+	@$(LD) $(LDFLAGS) -o $(PROGNAME).elf $^ -lgcc -lc -lgcc $(LDDEBUG)
+	@rm -f *.d
+
+crt0.o : $(ARMLIB)/crt0.s
+	@$(AS) -mthumb-interwork $^ -o crt0.o
+
+%.o : %.c
+	@echo "[COMPILE] Compiling $<"
+	@$(CC) $(CFLAGS) -c $< -o $@
+
+clean :
+	@echo "[CLEAN] Removing all compiled files"
+	@rm -f *.o *.elf *.gba *.d
+	@rm -f main/*.o main/*.elf main/*.gba main/*.d
+	@rm -f images/*.o images/*.elf images/*.gba images/*.d
+	@rm -f text/*.o text/*.elf text/*.gba text/*.d
+
+vba : CFLAGS += $(CRELEASE)
+vba : $(PROGNAME).gba
+	@echo "[EXECUTE] Running Emulator VBA-M"
+	@vbam $(VBAOPT) $(PROGNAME).gba > /dev/null 2> /dev/null
+
+wxvba : CFLAGS += $(CRELEASE)
+wxvba : $(PROGNAME).gba
+	@echo "[EXECUTE] Running Emulator WXVBAM"
+	@wxvbam $(PROGNAME).gba
+
+med : CFLAGS += $(CRELEASE)
+med : $(PROGNAME).gba
+	@echo "[EXECUTE] RUnning emulator Mednafen"
+	@mednafen $(PROGNAME).gba > /dev/null 2> 1
+
+-include $(CFILES:%.c=%.d)
